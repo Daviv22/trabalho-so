@@ -39,8 +39,16 @@ void* monitor_timeout(void* arg) {
     return NULL;
 }
 
+// Limpa o buffer para não "atropelar" as leituras de teclado
+void limpar_buffer() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+
 int main() {
-    char binario[100];
+    char linha_comando[256];
+    char *args[16]; // Suporta o comando + 14 argumentos
+
     float cpu_quota, cpu_usada_total = 0;
     float mem_usada = 0;
     long limite_memoria;
@@ -51,18 +59,36 @@ int main() {
     if (scanf("%f", &cpu_quota) <= 0) return 1;
     printf("Limite de Memoria Acumulada (KB) (ex: 100MB -> 102400): ");
     if (scanf("%ld", &limite_memoria) <= 0) return 1;
+    limpar_buffer();
 
     // Executa enquanto o limite de CPU e Memória não forem atingidos
     while (cpu_usada_total < cpu_quota && mem_usada < (float)limite_memoria) {
         printf("\n------------------------------------------------\n");
-        printf("Status: CPU [%.2fs / %.2fs] | Mem [%.0fKB / %ldKB]\n", cpu_usada_total, cpu_quota, mem_usada, limite_memoria);
-        printf("Digite o caminho do binário (ex: /bin/ls) ou 'sair': ");
-        scanf("%s", binario);
+        printf("Status: CPU [%.2fs / %.2fs] | Mem [%.0fKB / %ldKB]\n",
+                cpu_usada_total, cpu_quota, mem_usada, limite_memoria);
 
-        if (strcmp(binario, "sair") == 0) break;
+        printf("Digite o caminho do binário (ex: /bin/ls) ou 'sair': ");
+        if (fgets(linha_comando, sizeof(linha_comando), stdin) == NULL) break;
+
+        // Remove o \n do fgets
+        linha_comando[strcspn(linha_comando, "\n")] = 0;
+
+        // Se a linha for vazia, ignora e volta ao menu
+        if (strlen(linha_comando) == 0) continue;
+        if (strcmp(linha_comando, "sair") == 0) break;
+
+
+        // Separa o comando dos argumentos (Tokenização)
+        int i = 0;
+        args[i] = strtok(linha_comando, " ");
+        while (args[i] != NULL && i < 15) {
+            i++;
+            args[i] = strtok(NULL, " ");
+        }
 
         printf("Defina o timeout de relogio (segundos): ");
-        scanf("%d", &tempo_limite);
+        if (scanf("%d", &tempo_limite) <= 0) break;
+        limpar_buffer();
 
         //Pipe para comunicação entre processos
         if (pipe(fd) == -1) {
@@ -82,16 +108,15 @@ int main() {
             close(fd[0]); // Fecha leitura do filho
 
             // Enviando sinal de pronto
-            char msg[] = "Processo filho inicializado.";
+            char msg[] = "Executando...";
             write(fd[1], msg, strlen(msg) + 1);
             close(fd[1]); // Fecha a escrita após enviar
 
             // Lançar execução de qualquer binário
-            char *args[] = {binario, NULL};
-            execvp(binario, args); // Transforma o provesso filho criado com 'fork' no binário definido pelo usuário
+            execvp(args[0], args); // Executa com todos os argumentos
 
             // Se chegar aqui, houve erro no execvp
-            fprintf(stderr, "Erro ao executar o binário '%s': %s\n", binario, strerror(errno));
+            fprintf(stderr, "Erro ao executar o binário '%s': %s\n", args[0], strerror(errno));
             exit(EXIT_FAILURE);
 
         } else {        // Processo pai
