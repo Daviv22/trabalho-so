@@ -72,6 +72,7 @@ int main() {
         printf("Digite o caminho do binário (ex: /bin/ls) ou 'sair': ");
         if (fgets(linha_comando, sizeof(linha_comando), stdin) == NULL) break;
 
+        // Remove o \n do fgets
         linha_comando[strcspn(linha_comando, "\n")] = 0;
 
         // Se a linha for vazia, ignora e volta ao menu
@@ -133,9 +134,9 @@ int main() {
             pthread_t tid;
             pthread_create(&tid, NULL, monitor_timeout, NULL); // Inicia o monitoramento de tempo
 
-            wait4(pid_filho, NULL, 0, &uso);
-            processo_terminou = 1;
-            pthread_join(tid, NULL);
+            wait4(pid_filho, NULL, 0, &uso);    // Bloqueia o processo pai até terminar ação do binário (processo filho)
+            processo_terminou = 1;              // Sinaliza para a thread de timeout parar
+            pthread_join(tid, NULL);            // Sincroniza a thread
 
             float tempo_cpu_filho = (uso.ru_utime.tv_sec + (uso.ru_utime.tv_usec / 1000000.0)) + 
                                     (uso.ru_stime.tv_sec + (uso.ru_stime.tv_usec / 1000000.0));
